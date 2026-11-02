@@ -262,6 +262,22 @@ def build_text(ctx):
     else:
         bias = f"Neutral between {fmt(sup[0][0])} and {fmt(res[0][1])}. Avoid entering in the middle of the range."
     ctx["bias"] = bias
+    ctx["t4_name"] = {"bearish": "BEARISH", "bullish": "BULLISH", "recovery": "CORRECTIVE", "pullback": "CORRECTIVE", "range": "RANGE-BOUND"}[l4]
+    s_lo, r_hi = fmt(sup[0][0]), fmt(res[0][1])
+    if s4 < 0 and intra >= 1:
+        ctx["bias_short"], ctx["bias_col"] = f"RECOVERY ACTIVE ABOVE {s_lo}", "#f1c40f"
+    elif s4 > 0 and intra <= -1:
+        ctx["bias_short"], ctx["bias_col"] = f"PULLBACK BELOW {r_hi}", "#ff3b3b"
+    elif s4 < 0:
+        ctx["bias_short"], ctx["bias_col"] = f"BEARISH BELOW {r_hi}", "#ff3b3b"
+    elif s4 > 0:
+        ctx["bias_short"], ctx["bias_col"] = f"BULLISH ABOVE {s_lo}", "#2eea7a"
+    elif intra >= 1:
+        ctx["bias_short"], ctx["bias_col"] = f"NEUTRAL-BULLISH ABOVE {s_lo}", "#2eea7a"
+    elif intra <= -1:
+        ctx["bias_short"], ctx["bias_col"] = f"NEUTRAL-BEARISH BELOW {r_hi}", "#ff3b3b"
+    else:
+        ctx["bias_short"], ctx["bias_col"] = f"NEUTRAL {s_lo}–{r_hi}", "#f1c40f"
 
     event = ""
     if d.weekday() == 4 and d.day <= 7:
@@ -289,98 +305,165 @@ def build_text(ctx):
 
 # ---------- chart card ----------
 def make_card(ctx, path):
+    import numpy as np
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
+    import matplotlib.patheffects as pe
+    from matplotlib.patches import Rectangle, FancyBboxPatch, Circle
 
-    NAVY, PANEL, GOLD = "#0b1424", "#13203a", "#d4af37"
-    RED, GREEN, GREY, WHITE = "#e74c3c", "#2ecc71", "#8a97ad", "#f2f4f8"
-    W, H = 1080, 1350
-    fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=NAVY)
+    BLACK, PANEL, GOLD, GOLD2 = "#05070c", "#0a1020", "#d9b04a", "#f3d98b"
+    RED, GREEN, GREY, WHITE, YEL = "#ff3b3b", "#2eea7a", "#8c97ab", "#f4f4f4", "#f1c40f"
+    W, H = 1080, 1600
+    fig = plt.figure(figsize=(W / 100, H / 100), dpi=100, facecolor=BLACK)
     bg = fig.add_axes([0, 0, 1, 1])
     bg.set_xlim(0, W)
     bg.set_ylim(H, 0)
     bg.axis("off")
-    bg.add_patch(Rectangle((0, 0), W, 8, color=GOLD))
-    bg.add_patch(Rectangle((0, H - 8), W, 8, color=GOLD))
+    # warm gold glow at the bottom
+    grad = np.zeros((160, 2, 4))
+    grad[..., 0], grad[..., 1], grad[..., 2] = 0.85, 0.62, 0.15
+    grad[..., 3] = np.linspace(0, 0.28, 160)[:, None]
+    bg.imshow(grad, extent=(0, W, H, H - 260), aspect="auto", zorder=0)
+    bg.set_xlim(0, W)
+    bg.set_ylim(H, 0)
 
+    def box(x, y, w, h, edge=GOLD, face=PANEL, lw=1.8, r=10):
+        bg.add_patch(FancyBboxPatch((x, y), w, h, boxstyle=f"round,pad=0,rounding_size={r}",
+                                    facecolor=face, edgecolor=edge, linewidth=lw, zorder=2))
+
+    def line(x0, x1, y):
+        bg.plot([x0, x1], [y, y], color=GOLD, linewidth=1.2, zorder=2)
+
+    glow = [pe.withStroke(linewidth=2.5, foreground="#3a2a05")]
+    # header
     logo = ctx.get("logo")
+    cx, cy, rr = W / 2, 92, 62
+    bg.add_patch(Circle((cx, cy), rr + 5, facecolor=BLACK, edgecolor=GOLD, linewidth=3, zorder=2))
     if logo and os.path.exists(logo):
-        ax = fig.add_axes([60 / W, 1 - 190 / H, 130 / W, 130 / H])
-        ax.imshow(plt.imread(logo))
+        ax = fig.add_axes([(cx - rr) / W, 1 - (cy + rr) / H, 2 * rr / W, 2 * rr / H])
+        im = ax.imshow(plt.imread(logo))
+        im.set_clip_path(Circle((im.get_array().shape[1] / 2, im.get_array().shape[0] / 2),
+                                im.get_array().shape[1] / 2, transform=ax.transData))
         ax.axis("off")
-    bg.text(215, 95, "TODAY'S MARKET VIEW", color=GOLD, fontsize=31, fontweight="bold", va="center")
+    bg.text(W / 2, 188, "C H A M P   M A R K E T   L A B S", color=GOLD2, fontsize=15, ha="center", va="center")
+    line(60, 300, 188)
+    line(780, 1020, 188)
+    bg.text(W / 2, 255, "TODAY'S MARKET VIEW", color=GOLD2, fontsize=47, fontweight="bold", family="DejaVu Serif",
+            ha="center", va="center", path_effects=glow)
     d = ctx["date"]
-    bg.text(215, 150, f"XAUUSD  •  {d.day} {d.strftime('%B %Y')}", color=WHITE, fontsize=19, va="center")
-    bg.text(W - 60, 95, fmt(round(ctx["price"])), color=WHITE, fontsize=31, fontweight="bold", ha="right", va="center")
-    bg.text(W - 60, 150, "Gold now", color=GREY, fontsize=15, ha="right", va="center")
+    bg.text(W / 2, 330, f"{d.day:02d} {d.strftime('%b').upper()} {d.year}", color=WHITE, fontsize=22,
+            ha="center", va="center")
+    line(60, 380, 330)
+    line(700, 1020, 330)
 
-    # chart
-    bars = ctx["h1"][-96:]
-    cy0, cy1 = 215, 840
-    ax = fig.add_axes([60 / W, 1 - cy1 / H, (W - 120) / W, (cy1 - cy0) / H], facecolor=PANEL)
+    # four info boxes
+    res, sup = ctx["res"], ctx["sup"]
+    by, bh, bw, gap, x0 = 372, 146, 246, 12, 30
+    xs = [x0 + i * (bw + gap) for i in range(4)]
+    for x in xs:
+        box(x, by, bw, bh)
+    zl, zh = ctx["zone"]
+    bg.text(xs[0] + bw / 2, by + 30, "CURRENT ZONE", color=WHITE, fontsize=14, fontweight="bold", ha="center", va="center")
+    box(xs[0] + 18, by + 58, bw - 36, 62, edge=GOLD, face="#111827", lw=1.2, r=6)
+    bg.text(xs[0] + bw / 2, by + 90, f"{fmt(zl)}–{fmt(zh)}", color=GOLD2, fontsize=21, fontweight="bold",
+            ha="center", va="center")
+    bg.text(xs[1] + bw / 2, by + 30, f"BIAS: 4H {ctx['t4_name']}", color=WHITE, fontsize=12.5, fontweight="bold",
+            ha="center", va="center")
+    bl = textwrap.wrap(ctx["bias_short"], 17)[:3]
+    bg.text(xs[1] + bw / 2, by + 88, "\n".join(bl), color=ctx["bias_col"], fontsize=16, fontweight="bold",
+            ha="center", va="center", linespacing=1.3)
+    bg.text(xs[2] + bw / 2, by + 30, "RESISTANCE", color=WHITE, fontsize=14, fontweight="bold", ha="center", va="center")
+    for i, z in enumerate(res[:2]):
+        bg.text(xs[2] + bw / 2, by + 72 + i * 36, zf(z), color=RED, fontsize=18, fontweight="bold", ha="center", va="center")
+    bg.text(xs[3] + bw / 2, by + 28, "SUPPORT", color=WHITE, fontsize=14, fontweight="bold", ha="center", va="center")
+    for i, z in enumerate(sup[:3]):
+        bg.text(xs[3] + bw / 2, by + 62 + i * 31, zf(z), color=GREEN, fontsize=17, fontweight="bold", ha="center", va="center")
+
+    # chart panel
+    py0, py1 = 545, 1085
+    box(30, py0, W - 60, py1 - py0, r=8)
+    ax = fig.add_axes([48 / W, 1 - (py1 - 38) / H, (W - 160) / W, (py1 - py0 - 70) / H], facecolor=PANEL)
+    bars = ctx["h1"][-72:]
     atr_h, price = ctx["atr"], ctx["price"]
-    wlo, whi = min(b[3] for b in bars), max(b[2] for b in bars)
-    lo, hi = wlo, whi
-    for z in (ctx["res"][0], ctx["res"][1], ctx["sup"][0], ctx["sup"][1]):
-        if abs((z[0] + z[1]) / 2 - price) < 4 * atr_h:
-            lo, hi = min(lo, z[0]), max(hi, z[1])
+    lo, hi = min(b[3] for b in bars), max(b[2] for b in bars)
+    lvls = [("R1", res[0], res[0][1], RED), ("R2", res[1], round(sum(res[1]) / 2), RED),
+            ("S1", sup[0], sup[0][0], GREEN), ("S2", sup[1], round(sum(sup[1]) / 2), GREEN),
+            ("S3", sup[2], round(sum(sup[2]) / 2), GREEN)]
+    for tag, z, val, col in lvls[:4]:
+        if abs(val - price) < 4 * atr_h:
+            lo, hi = min(lo, val), max(hi, val)
     pad = 0.6 * atr_h
     ax.set_ylim(lo - pad, hi + pad)
-    ax.set_xlim(-1, len(bars) + 14)
+    ax.set_xlim(-1, len(bars) + 12)
     for i, (t, o, h, l, c) in enumerate(bars):
         col = GREEN if c >= o else RED
         ax.vlines(i, l, h, color=col, linewidth=1.2)
         ax.bar(i, max(abs(c - o), 0.15), bottom=min(o, c), width=0.62, color=col)
     ylo, yhi = ax.get_ylim()
     tr = ax.get_yaxis_transform()
-    for tag, z, col in (("R1", ctx["res"][0], RED), ("R2", ctx["res"][1], RED),
-                        ("S1", ctx["sup"][0], GREEN), ("S2", ctx["sup"][1], GREEN)):
-        if z[1] < ylo or z[0] > yhi:
-            continue
-        ax.axhspan(z[0], z[1], color=col, alpha=0.20, linewidth=0)
-        ax.text(0.995, (z[0] + z[1]) / 2, f"{tag}  {zf(z)}", transform=tr, color=col, fontsize=12.5,
-                fontweight="bold", ha="right", va="center")
-    ax.axhline(price, color=GOLD, linestyle="--", linewidth=1.2)
-    ax.text(0.01, price, f" {price:,.1f}", transform=tr, color=NAVY, fontsize=12, fontweight="bold",
-            va="bottom", bbox=dict(boxstyle="round,pad=0.2", fc=GOLD, ec=GOLD))
-    # x ticks = start of each IST day
+    tagbox = lambda col: dict(boxstyle="round,pad=0.25", fc=col, ec=col)
+    items = [(val, col, fmt(val), False) for tag, z, val, col in lvls if ylo <= val <= yhi]
+    items.append((price, YEL, f"{fmt(round(price))} CURRENT", True))
+    for val, col, txt, cur in items:
+        if cur:
+            ax.axhline(val, color=YEL, linestyle=":", linewidth=1.4)
+        else:
+            ax.axhline(val, color=col, linestyle=(0, (4, 3)), linewidth=1.2, alpha=0.9)
+    gap = (yhi - ylo) * 0.05
+    items.sort(key=lambda t: t[0])
+    pos = [t[0] for t in items]
+    for _ in range(40):  # push overlapping tags apart
+        moved = False
+        for i in range(1, len(pos)):
+            if pos[i] - pos[i - 1] < gap:
+                mid = (pos[i] + pos[i - 1]) / 2
+                pos[i - 1], pos[i] = mid - gap / 2, mid + gap / 2
+                moved = True
+        if not moved:
+            break
+    for (val, col, txt, cur), y in zip(items, pos):
+        fc = "#05070c" if col in (GREEN, YEL) else WHITE
+        ax.text(0.985, y, txt, transform=tr, color=fc, fontsize=12 if cur else 12.5, fontweight="bold",
+                ha="right", va="center", bbox=tagbox(col), zorder=6)
     ticks, labels, last = [], [], None
     for i, b in enumerate(bars):
         day = dt.datetime.fromtimestamp(b[0], IST)
         if day.date() != last:
             if last is not None:
                 ticks.append(i)
-                labels.append(day.strftime("%a %d"))
+                labels.append(day.strftime("%d %b"))
             last = day.date()
     ax.set_xticks(ticks)
     ax.set_xticklabels(labels, color=GREY, fontsize=12)
-    ax.tick_params(axis="y", colors=GREY, labelsize=12)
+    ax.yaxis.tick_right()
+    ax.tick_params(axis="y", colors=GREY, labelsize=11.5, length=0)
+    ax.tick_params(axis="x", length=0)
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{int(v):,}"))
-    ax.grid(color="#22304d", linewidth=0.6)
+    ax.grid(color="#1a2640", linewidth=0.6)
     for s in ax.spines.values():
-        s.set_color("#22304d")
-    bg.text(60, cy1 + 62, "1H chart • last 4 sessions", color=GREY, fontsize=12, va="center")
+        s.set_visible(False)
+    ax.text(0.01, 0.97, "XAUUSD • 1H", transform=ax.transAxes, color=WHITE, fontsize=16, fontweight="bold", va="top", zorder=6, bbox=dict(boxstyle="round,pad=0.3", fc=PANEL, ec=PANEL))
 
     # scenario boxes
-    by0, bh = 905, 215
-    for x0, title, col, trig, tg in (
-            (60, f"BEARISH BELOW {fmt(ctx['sell_tr'])}", RED, "Sellers may target", ctx["sell_t"]),
-            (555, f"BULLISH ABOVE {fmt(ctx['buy_tr'])}", GREEN, "Buyers may target", ctx["buy_t"])):
-        bg.add_patch(Rectangle((x0, by0), 465, bh, facecolor=PANEL, edgecolor=col, linewidth=2))
-        bg.text(x0 + 232, by0 + 55, title, color=col, fontsize=19, fontweight="bold", ha="center", va="center")
-        bg.text(x0 + 232, by0 + 112, trig, color=GREY, fontsize=14, ha="center", va="center")
-        bg.text(x0 + 232, by0 + 160, "  →  ".join(fmt(v) for v in tg), color=WHITE, fontsize=19,
-                fontweight="bold", ha="center", va="center")
-    # bias
-    bias = "\n".join(textwrap.wrap("Bias: " + ctx["bias"], 62)[:3])
-    bg.text(W / 2, 1190, bias, color=WHITE, fontsize=15.5, ha="center", va="center", linespacing=1.5)
-    bg.add_patch(Rectangle((60, 1245, ), W - 120, 58, color=GOLD))
-    bg.text(W / 2, 1274, "WAIT FOR CONFIRMATION", color=NAVY, fontsize=20, fontweight="bold", ha="center", va="center")
-    bg.text(W / 2, 1328, "champmarketlabs.com  •  Educational only  •  Manage risk", color=GREY, fontsize=12.5,
-            ha="center", va="center")
-    fig.savefig(path, facecolor=NAVY)
+    sy, sh, sw = 1112, 190, 497
+    for x, title, word, col, face, tg, arrow in (
+            (30, f"{fmt(ctx['buy_tr'])}", "BULLISH ABOVE ", GREEN, "#06220f", ctx["buy_t"], "↗"),
+            (553, f"{fmt(ctx['sell_tr'])}", "BEARISH BELOW ", RED, "#2a0707", ctx["sell_t"], "↘")):
+        box(x, sy, sw, sh, edge=col, face=face, lw=2.2)
+        bg.text(x + 48, sy + 50, arrow, color=col, fontsize=34, fontweight="bold", ha="center", va="center")
+        bg.text(x + 92, sy + 50, word + title, color=WHITE, fontsize=22, fontweight="bold", ha="left", va="center")
+        bg.text(x + sw / 2, sy + 108, "Targets", color=WHITE, fontsize=15, ha="center", va="center")
+        bg.text(x + sw / 2, sy + 152, " → ".join(fmt(v) for v in tg), color=col, fontsize=26, fontweight="bold",
+                ha="center", va="center")
+
+    # banner + footer
+    box(100, 1335, W - 200, 70, edge=GOLD2, face="#07090f", lw=2.2, r=12)
+    bg.text(W / 2, 1371, "W A I T   F O R   C O N F I R M A T I O N", color=GOLD2, fontsize=21, fontweight="bold",
+            family="DejaVu Serif", ha="center", va="center")
+    bg.text(W / 2, 1450, "EDUCATIONAL ONLY  •  MANAGE RISK", color=GREY, fontsize=13, ha="center", va="center")
+    bg.text(W / 2, 1490, "champmarketlabs.com", color=GOLD, fontsize=14, ha="center", va="center")
+    fig.savefig(path, facecolor=BLACK)
     plt.close(fig)
     return open(path, "rb").read()
 
