@@ -1,0 +1,16 @@
+name: Daily Telegram post
+on:
+  schedule:
+    - cron: "30 3 * * *"   # 09:00 IST every day
+  workflow_dispatch: {}
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send today's post
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: "@Goldtraderchamp"
+          START_DATE: "2026-11-03"
+        run: python3 post_daily.py
