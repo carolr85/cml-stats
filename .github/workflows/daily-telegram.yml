@@ -1,7 +1,7 @@
 name: Daily Telegram post
 on:
   schedule:
-    - cron: "30 3 * * *"   # 09:00 IST every day
+    - cron: 30 3,12 * * *
   workflow_dispatch: {}
 jobs:
   post:
@@ -13,4 +13,4 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: "@Goldtraderchamp"
           START_DATE: "2026-11-02"
-        run: python3 post_daily.py
+        run: pip install -q matplotlib && python3 run_slot.py
