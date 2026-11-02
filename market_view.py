@@ -518,7 +518,15 @@ def main():
                logo=os.path.join(os.path.dirname(os.path.abspath(__file__)), "cml-logo.png"))
     ctx["date"] = dt.date(now.year, now.month, now.day)
     caption = build_text(ctx)
-    png = make_card(ctx, OUT)
+    png = None
+    try:  # branded artwork card; fall back to the plain card if anything goes wrong
+        import card_art
+        if card_art.available():
+            png = card_art.make_card(ctx, OUT)
+    except Exception as e:  # noqa
+        print("artwork card failed, using plain card:", e)
+    if png is None:
+        png = make_card(ctx, OUT)
     print(caption)
     print(f"\n[caption {len(caption)} chars, card {len(png)} bytes]")
     if DRY:
