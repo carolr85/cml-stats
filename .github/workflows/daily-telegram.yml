@@ -1,8 +1,19 @@
 name: Daily Telegram post
 on:
   schedule:
-    - cron: 30 3,12 * * *
-  workflow_dispatch: {}
+    - cron: "7,37 * * * *"   # every 30 min; run_slot.py decides what is due (9 AM view, 6 PM education)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto = same as timer, view-live / edu-live = send now, view-dry / edu-dry = test only"
+        type: choice
+        default: view-dry
+        options: [view-dry, view-live, edu-dry, edu-live, auto]
+permissions:
+  contents: write
+concurrency:
+  group: daily-telegram
+  cancel-in-progress: false
 jobs:
   post:
     runs-on: ubuntu-latest
@@ -13,4 +24,15 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: "@Goldtraderchamp"
           START_DATE: "2026-11-02"
+          RUN_MODE: ${{ github.event.inputs.mode }}
         run: pip install -q matplotlib && python3 run_slot.py
+      - name: Remember what was posted
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain posted.json)" ]; then
+            git config user.name "cml-stats-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add posted.json
+            git commit -m "Record Telegram post"
+            git pull --rebase -q && git push
+          fi
