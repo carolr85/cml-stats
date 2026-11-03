@@ -299,6 +299,7 @@ def build_text(ctx):
         event + "⏳ Wait for a confirmed breakout, retest or clear rejection before entering.",
         "Levels are approximate; check your broker's live price.",
         "Educational only • Manage risk",
+        "🌐 champmarketlabs.com",
     ]
     return "\n".join(l.rstrip("\n") for l in lines)
 
