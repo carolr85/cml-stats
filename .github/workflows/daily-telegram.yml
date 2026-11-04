@@ -17,6 +17,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - name: Send today's post
@@ -25,14 +26,27 @@ jobs:
           TELEGRAM_CHAT_ID: "@Goldtraderchamp"
           START_DATE: "2026-11-02"
           RUN_MODE: ${{ github.event.inputs.mode }}
-        run: pip install -q matplotlib && python3 run_slot.py
-      - name: Remember what was posted
-        if: always()
         run: |
-          if [ -n "$(git status --porcelain posted.json)" ]; then
-            git config user.name "cml-stats-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add posted.json
-            git commit -m "Record Telegram post"
-            git pull --rebase -q && git push
+          pip install -q matplotlib
+          git config user.name "cml-stats-bot"
+          git config user.email "actions@users.noreply.github.com"
+          remember() {
+            if [ -n "$(git status --porcelain posted.json)" ]; then
+              git add posted.json
+              git commit -q -m "Record Telegram post"
+              git pull --rebase -q && git push -q || echo "push failed - will retry"
+            fi
+          }
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            code=0; python3 run_slot.py || code=$?; remember; exit $code
           fi
+          # GitHub's free timer skips most runs, so a run that does start STAYS AWAKE
+          # for up to ~5h45m and checks every 5 min, posting the moment a slot is due
+          # (9 AM view, 6 PM education). posted.json stops anything being sent twice.
+          end=$(( $(date +%s) + 345*60 ))
+          while [ $(date +%s) -lt $end ]; do
+            git pull --rebase -q || true
+            python3 run_slot.py || echo "slot failed - retrying in 5 min"
+            remember
+            sleep 300
+          done
