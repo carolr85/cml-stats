@@ -495,6 +495,14 @@ def save_site(ctx, png, caption):
         here = os.path.dirname(os.path.abspath(__file__))
         d = os.path.join(here, "site")
         os.makedirs(d, exist_ok=True)
+        if DRY:  # a test/website-only run never replaces the real post of the same day
+            try:
+                old = json.load(open(os.path.join(d, "today.json")))
+                if old.get("date") == ctx["date"].isoformat() and old.get("source") == "telegram":
+                    print("Website already has today's Telegram picture - kept it.")
+                    return
+            except Exception:
+                pass
         img = "today.jpg"
         try:
             from PIL import Image
@@ -517,7 +525,7 @@ def save_site(ctx, png, caption):
                     zone=list(ctx.get("zone", ())),
                     resistance=[list(z) for z in ctx["res"][:3]],
                     support=[list(z) for z in ctx["sup"][:3]],
-                    image=img, caption=caption)
+                    image=img, caption=caption, source="test" if DRY else "telegram")
         with open(os.path.join(d, "today.json"), "w") as f:
             json.dump(info, f, indent=1, ensure_ascii=False)
         print("Website files saved in site/.")
