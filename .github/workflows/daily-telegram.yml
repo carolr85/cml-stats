@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto = same as timer, view-live / edu-live = send now, view-dry / edu-dry = test only"
+        description: "auto = same as timer, view-live / edu-live = send now, view-dry / edu-dry = test only, view-site = website picture only"
         type: choice
         default: view-dry
-        options: [view-dry, view-live, edu-dry, edu-live, auto]
+        options: [view-dry, view-live, edu-dry, edu-live, auto, view-site]
 permissions:
   contents: write
 concurrency:
@@ -31,8 +31,8 @@ jobs:
           git config user.name "cml-stats-bot"
           git config user.email "actions@users.noreply.github.com"
           remember() {
-            if [ -n "$(git status --porcelain posted.json)" ]; then
-              git add posted.json
+            if [ -n "$(git status --porcelain posted.json site)" ]; then
+              git add posted.json site
               git commit -q -m "Record Telegram post"
               git pull --rebase -q && git push -q || echo "push failed - will retry"
             fi
