@@ -6,7 +6,8 @@ import os, json, subprocess, sys, datetime as dt
 #   education    -> from 18:00 IST until 23:59 IST
 # A late run therefore never sends the wrong post at the wrong hour, and nothing is posted twice.
 # Manual runs: pick a mode when you press "Run workflow" (default view-dry = sends nothing).
-#   auto = same as the timer, view-live / edu-live = send now, view-dry / edu-dry = test only.
+#   auto = same as the timer, view-live / edu-live = send now, view-dry / edu-dry = test only,
+#   view-site = update only the website's "Today's Gold View" picture (nothing sent to Telegram).
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 STATE = "posted.json"
@@ -29,9 +30,10 @@ def save(state):
         f.write("\n")
 
 
-def run(name, dry):
+def run(name, dry, site=False):
     env = dict(os.environ)
     env["DRY_RUN"] = "1" if dry else ""
+    env["SITE_TEST"] = "1" if site else ""  # view-site: refresh the website picture only
     print(f"-> {name} ({'dry' if dry else 'live'})")
     return subprocess.call([sys.executable, SLOTS[name][0]], env=env)
 
@@ -50,7 +52,7 @@ def main():
 
     if mode != "auto":
         name, kind = mode.split("-")
-        code = run(name, kind == "dry")
+        code = run(name, kind in ("dry", "site"), kind == "site")
         if code == 0 and kind == "live":
             state[name] = today
             save(state)

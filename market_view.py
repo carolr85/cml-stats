@@ -488,6 +488,43 @@ def send_message(text):
     return http(f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data, tries=1)
 
 
+# ---------- website copy (champmarketlabs.com "Today's Gold View") ----------
+def save_site(ctx, png, caption):
+    """Save the posted card + a small JSON into site/ so the website shows the same view."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        d = os.path.join(here, "site")
+        os.makedirs(d, exist_ok=True)
+        img = "today.jpg"
+        try:
+            from PIL import Image
+            im = Image.open(io.BytesIO(png)).convert("RGB")
+            if im.width > 1100:
+                im = im.resize((1100, round(im.height * 1100 / im.width)), Image.LANCZOS)
+            im.save(os.path.join(d, img), "JPEG", quality=86, optimize=True)
+        except Exception:
+            img = "today.png"
+            open(os.path.join(d, img), "wb").write(png)
+        try:
+            import card_art
+            bias = card_art.bias_label(ctx)[0].replace("Bias: ", "")
+            sub = card_art.subtitle(ctx)
+        except Exception:
+            bias, sub = "", ""
+        now = dt.datetime.fromtimestamp(NOW, IST)
+        info = dict(date=ctx["date"].isoformat(), posted=now.strftime("%Y-%m-%d %H:%M IST"),
+                    price=round(ctx["price"], 1), bias=bias, summary=sub,
+                    zone=list(ctx.get("zone", ())),
+                    resistance=[list(z) for z in ctx["res"][:3]],
+                    support=[list(z) for z in ctx["sup"][:3]],
+                    image=img, caption=caption)
+        with open(os.path.join(d, "today.json"), "w") as f:
+            json.dump(info, f, indent=1, ensure_ascii=False)
+        print("Website files saved in site/.")
+    except Exception as e:  # never let the website copy break the Telegram post
+        print("website save failed:", e)
+
+
 def main():
     now = dt.datetime.fromtimestamp(NOW, IST)
     if now.weekday() >= 5:
@@ -531,6 +568,8 @@ def main():
     print(caption)
     print(f"\n[caption {len(caption)} chars, card {len(png)} bytes]")
     if DRY:
+        if os.environ.get("SITE_TEST") == "1":
+            save_site(ctx, png, caption)
         print("DRY RUN - nothing sent.")
         return 0
     if not TOKEN:
@@ -543,6 +582,7 @@ def main():
         send_photo(png, "\n".join(head))
         send_message(rest)
     print("Posted.")
+    save_site(ctx, png, caption)
     return 0
 
 
